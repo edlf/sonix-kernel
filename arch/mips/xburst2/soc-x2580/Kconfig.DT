@@ -1,0 +1,2 @@
+config DT_X2580_MODULE_BASE
+	bool "x2580 base for module drivers"

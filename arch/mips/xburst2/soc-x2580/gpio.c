@@ -1,0 +1,308 @@
+#include <linux/kernel.h>
+#include <linux/printk.h>
+#include <linux/io.h>
+#include <soc/base.h>
+#include <soc/gpio.h>
+
+#define GPIO_PORT_OFF    0x1000
+#define GPIO_SHADOW_OFF  0x7000
+
+#define PXPIN      0x00   /* PIN Level Register */
+#define PXINT      0x10   /* Port Interrupt Register */
+#define PXINTS     0x14   /* Port Interrupt Set Register */
+#define PXINTC     0x18   /* Port Interrupt Clear Register */
+#define PXMSK      0x20   /* Port Interrupt Mask Reg */
+#define PXMSKS     0x24   /* Port Interrupt Mask Set Reg */
+#define PXMSKC     0x28   /* Port Interrupt Mask Clear Reg */
+#define PXPAT1     0x30   /* Port Pattern 1 Set Reg. */
+#define PXPAT1S    0x34   /* Port Pattern 1 Set Reg. */
+#define PXPAT1C    0x38   /* Port Pattern 1 Clear Reg. */
+#define PXPAT0     0x40   /* Port Pattern 0 Register */
+#define PXPAT0S    0x44   /* Port Pattern 0 Set Register */
+#define PXPAT0C    0x48   /* Port Pattern 0 Clear Register */
+#define PXFLG      0x50   /* Port Flag Register */
+#define PXFLGC     0x58   /* Port Flag clear Register */
+#define PXPU       0x110   /* Port PULL-UP State Register */
+#define PXPUS      0x114   /* Port PULL-UP State Set Register */
+#define PXPUC      0x118   /* Port PULL-UP State Clear Register */
+#define PXPD       0x120   /* Port PULL-DOWN State Register */
+#define PXPDS      0x124   /* Port PULL-DOWN State Set Register */
+#define PXPDC      0x128   /* Port PULL-DOWN State Clear Register */
+
+#define PXDS0	   0x130   /* PORT Drive Strength State Register0*/
+#define PXDS0S	   0x134   /* PORT Drive Strength State set Register0*/
+#define PXDS0C	   0x138   /* PORT Drive Strength State clear Register0*/
+#define PXDS1	   0x140   /* PORT Drive Strength State Register1*/
+#define PXDS1S	   0x144   /* PORT Drive Strength State set Register1*/
+#define PXDS1C	   0x148   /* PORT Drive Strength State clear Register1*/
+#define PXDS2	   0x150   /* PORT Drive Strength State Register2*/
+#define PXDS2S	   0x154   /* PORT Drive Strength State set Register2*/
+#define PXDS2C	   0x158   /* PORT Drive Strength State clear Register2*/
+#define PXDS3	   0x1A0   /* PORT Drive Strength State Register3*/
+#define PXDS3S	   0x1A4   /* PORT Drive Strength State set Register3*/
+#define PXDS3C	   0x1A8   /* PORT Drive Strength State clear Register3*/
+#define PXSR	   0x160   /* PORT Slew Rate Register */
+#define PXSRS	   0x164   /* PORT Slew Rate Register Set */
+#define PXSRC	   0x168   /* PORT Slew Rate Register Clear */
+#define PXSMT	   0x170   /* PORT Schmitt Trigger Register */
+#define PXSMTS	   0x174   /* PORT Schmitt Trigger Register Set */
+#define PXSMTC	   0x178   /* PORT Schmitt Trigger Register Clear */
+
+#define PZGID2LD   0xF0   /* GPIOZ Group ID to load */
+
+#define SHADOW 4
+
+static const unsigned long gpiobase[] = {
+    [0] = (unsigned long)CKSEG1ADDR(GPIO_IOBASE + 0 * GPIO_PORT_OFF),
+    [1] = (unsigned long)CKSEG1ADDR(GPIO_IOBASE + 1 * GPIO_PORT_OFF),
+    [2] = (unsigned long)CKSEG1ADDR(GPIO_IOBASE + 2 * GPIO_PORT_OFF),
+    [3] = (unsigned long)CKSEG1ADDR(GPIO_IOBASE + 3 * GPIO_PORT_OFF),
+
+    [SHADOW] = (unsigned long)CKSEG1ADDR(GPIO_IOBASE + GPIO_SHADOW_OFF),
+};
+
+#define GPIO_ADDR(port, reg) ((volatile unsigned long *)(gpiobase[port] + reg))
+
+static inline void gpio_write(int port, unsigned int reg, int val)
+{
+    *GPIO_ADDR(port, reg) = val;
+}
+
+static inline unsigned int gpio_read(int port, unsigned int reg)
+{
+    return *GPIO_ADDR(port, reg);
+}
+
+static void hal_gpio_port_set_func(int port, unsigned int pins, enum gpio_function func)
+{
+    /* func option */
+    if (func & 0x10) {
+        int use_port = SHADOW;
+        #ifdef CONFIG_INGENIC_DISABLE_GPIO_UAE_SHADOW
+        use_port = port;
+        #endif
+        if (func & 0x8)
+            gpio_write(use_port, PXINTS, pins);
+        else
+            gpio_write(use_port, PXINTC, pins);
+
+        if (func & 0x4)
+            gpio_write(use_port, PXMSKS, pins);
+        else
+            gpio_write(use_port, PXMSKC, pins);
+
+        if (func & 0x2)
+            gpio_write(use_port, PXPAT1S, pins);
+        else
+            gpio_write(use_port, PXPAT1C, pins);
+
+        if (func & 0x1)
+            gpio_write(use_port, PXPAT0S, pins);
+        else
+            gpio_write(use_port, PXPAT0C, pins);
+
+        #ifndef CONFIG_INGENIC_DISABLE_GPIO_UAE_SHADOW
+        /* configure PzGID2LD to specify which port group to load */
+        gpio_write(SHADOW, PZGID2LD, port);
+        #endif
+    }
+
+    if (func & 0x80) {
+        int pull = (func >> 5) & 0x3;
+        if (pull == 0) { // no pull
+            gpio_write(port, PXPUC, pins);
+            gpio_write(port, PXPDC, pins);
+        }
+        if (pull == 1) { // pull up
+            gpio_write(port, PXPDC, pins);
+            gpio_write(port, PXPUS, pins);
+        }
+        if (pull == 2) { // pull down
+            gpio_write(port, PXPUC, pins);
+            gpio_write(port, PXPDS, pins);
+        }
+    }
+}
+
+unsigned long ingenic_pinctrl_lock(int port);
+void ingenic_pinctrl_unlock(int port, unsigned long flags);
+
+int jzgpio_set_func(int port, enum gpio_function func, unsigned long pins)
+{
+    unsigned long flags;
+
+    if (port == 0) {
+        if ((pins & 0x003F) || (pins & 0x0800) || (pins & 0x0400)) {
+            printk(KERN_ERR "PART-A:pins=0x%08lx invalid gpio pins for x2580\n", pins);
+            return -EINVAL;
+        }
+    }
+
+    if (port < 0 || port > 4) {
+        printk(KERN_ERR "gpio: invalid gpio port for x2580: %d\n", port);
+        return -EINVAL;
+    }
+
+    flags = ingenic_pinctrl_lock(port);
+
+    hal_gpio_port_set_func(port, pins, func);
+
+    ingenic_pinctrl_unlock(port, flags);
+
+    return 0;
+}
+EXPORT_SYMBOL(jzgpio_set_func);
+
+int jzgpio_set_strength(int port, int value, unsigned long pin)
+{
+    unsigned long flags;
+
+    if (port < 0 || port > 4) {
+        printk(KERN_ERR "gpio: invalid gpio port for x2580: %d\n", port);
+        return -EINVAL;
+    }
+
+    flags = ingenic_pinctrl_lock(port);
+
+    if(value & BIT(0))
+        gpio_write(port, PXDS0S, BIT(pin));
+    else
+        gpio_write(port, PXDS0C, BIT(pin));
+
+    if(value & BIT(1))
+        gpio_write(port, PXDS1S, BIT(pin));
+    else
+        gpio_write(port, PXDS1C, BIT(pin));
+
+    if(value & BIT(2))
+        gpio_write(port, PXDS2S, BIT(pin));
+    else
+        gpio_write(port, PXDS2C, BIT(pin));
+
+    if(value & BIT(3))
+        gpio_write(port, PXDS3S, BIT(pin));
+    else
+        gpio_write(port, PXDS3C, BIT(pin));
+
+    ingenic_pinctrl_unlock(port, flags);
+
+    return 0;
+}
+EXPORT_SYMBOL(jzgpio_set_strength);
+
+int jzgpio_get_strength(int port, int *value, unsigned long pin)
+{
+    unsigned long flags;
+
+    if (port < 0 || port > 4) {
+        printk(KERN_ERR "gpio: invalid gpio port for x2580: %d\n", port);
+        return -EINVAL;
+    }
+
+    flags = ingenic_pinctrl_lock(port);
+
+    *value = (gpio_read(port, PXDS0) & BIT(pin)) ? (1 << 0) : 0;
+    *value |= (gpio_read(port, PXDS1) & BIT(pin)) ? (1 << 1) : 0;
+    *value |= (gpio_read(port, PXDS2) & BIT(pin)) ? (1 << 2) : 0;
+    *value |= (gpio_read(port, PXDS3) & BIT(pin)) ? (1 << 3) : 0;
+
+    ingenic_pinctrl_unlock(port, flags);
+
+    return 0;
+}
+EXPORT_SYMBOL(jzgpio_get_strength);
+
+int jzgpio_set_slew_rate(int port, int value, unsigned long pin)
+{
+    unsigned long flags;
+
+    if (port < 0 || port > 4) {
+        printk(KERN_ERR "gpio: invalid gpio port for x2580: %d\n", port);
+        return -EINVAL;
+    }
+
+    flags = ingenic_pinctrl_lock(port);
+
+    if (value)
+        gpio_write(port, PXSRS, BIT(pin));
+    else
+        gpio_write(port, PXSRC, BIT(pin));
+
+    ingenic_pinctrl_unlock(port, flags);
+
+    return 0;
+}
+EXPORT_SYMBOL(jzgpio_set_slew_rate);
+
+int jzgpio_get_slew_rate(int port, int *value, unsigned long pin)
+{
+    unsigned long flags;
+
+    if (port < 0 || port > 4) {
+        printk(KERN_ERR "gpio: invalid gpio port for x2580: %d\n", port);
+        return -EINVAL;
+    }
+
+    flags = ingenic_pinctrl_lock(port);
+
+    *value = (gpio_read(port, PXSR) & BIT(pin)) ? (1 << 0) : 0;
+
+    ingenic_pinctrl_unlock(port, flags);
+
+    return 0;
+}
+EXPORT_SYMBOL(jzgpio_get_slew_rate);
+
+int jzgpio_set_schmitt(int port, int value, unsigned long pin)
+{
+    unsigned long flags;
+
+    if (port < 0 || port > 4) {
+        printk(KERN_ERR "gpio: invalid gpio port for x2580: %d\n", port);
+        return -EINVAL;
+    }
+
+    flags = ingenic_pinctrl_lock(port);
+
+    if(value & BIT(0))
+        gpio_write(port, PXSMTS, BIT(pin));
+    else
+        gpio_write(port, PXSMTC, BIT(pin));
+
+    ingenic_pinctrl_unlock(port, flags);
+
+    return 0;
+}
+EXPORT_SYMBOL(jzgpio_set_schmitt);
+
+int jzgpio_get_schmitt(int port, int *value, unsigned long pin)
+{
+    unsigned long flags;
+
+    if (port < 0 || port > 4) {
+        printk(KERN_ERR "gpio: invalid gpio port for x2580: %d\n", port);
+        return -EINVAL;
+    }
+
+    flags = ingenic_pinctrl_lock(port);
+
+    *value = (gpio_read(port, PXSMT) & BIT(pin)) ? (1 << 0) : 0;
+
+    ingenic_pinctrl_unlock(port, flags);
+
+    return 0;
+}
+EXPORT_SYMBOL(jzgpio_get_schmitt);
+
+void show_gpio_wakeup_sources(int port)
+{
+    int i;
+
+    unsigned int msk = gpio_read(port, PXMSK);
+    unsigned int flag = gpio_read(port, PXFLG);
+
+    for (i = 0; i < 32; ++i) {
+        if ((flag & (1 << i)) && !(msk & (1 << i)))
+            printk(KERN_ERR "WAKE UP: GPIO_P%c%02d\n", 'A' + port, i);
+    }
+}

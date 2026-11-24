@@ -1,0 +1,9 @@
+#
+# Focaltech Touchscreen driver configuration
+#
+
+config TOUCHSCREEN_FT6236
+    tristate "FT6236 I2C touchscreen"
+    help
+      Say Y here if you have Focaltech touch panel.
+      If unsure, say N.

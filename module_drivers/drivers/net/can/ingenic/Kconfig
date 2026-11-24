@@ -1,0 +1,20 @@
+menu "INGENIC CAN support"
+
+config INGENIC_CAN
+	tristate "ingenic on-chip CAN support"
+#	depends on
+	---help---
+	  Driver for the Microchip INGENIC CAN controllers.
+
+config INGENIC_CAN_USE_PDMA
+	bool "ingenic can use dma transmission"
+	default y
+	depends on INGENIC_CAN
+	---help---
+	Configure CAN to use DMA to transfer data
+config CAN_CLOCK
+	int "set can clk freq (8/12/24M)"
+	default 24
+	---help---
+		Configure CAN CLK-FREQ
+endmenu

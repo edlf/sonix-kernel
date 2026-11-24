@@ -1,0 +1,38 @@
+/ {
+	display-dbi {
+		compatible = "simple-bus";
+		#interrupt-cells = <1>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <>;
+		panel_st7789v3 {
+			compatible = "ingenic,st7789v3";
+			status = "okay";
+			pinctrl-names = "default";
+			pinctrl-0 = <&smart_lcd_spi>;
+			ingenic,pwm-gpio = <&gpc 0 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+			ingenic,cs-gpio = <&gpb 15 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+			ingenic,vdd-en-gpio = <&gpc 26 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+			ingenic,rst-gpio = <&gpb 12 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+			port {
+				panel_st7789v3_ep: endpoint {
+					remote-endpoint = <&dpu_out_ep>;
+				};
+			};
+		};
+	};
+	backlight {/*No use*/
+		compatible = "pwm-backlight";
+		pwms = <&pwm 0 1000000>;
+		brightness-levels = <0 4 8 16 32 64 128 255>;
+		default-brightness-level = <4>;
+	};
+};
+&dpu {
+	status = "okay";
+	port {
+		dpu_out_ep: endpoint {
+		remote-endpoint = <&panel_st7789v3_ep>;
+	    };
+	};
+};

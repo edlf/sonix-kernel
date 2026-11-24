@@ -1,0 +1,20 @@
+config DT_X2600_MODULE_BASE
+	bool "x2600 base for module drivers"
+config DT_X2660_EVB
+	bool "x2660 evb board"
+config DT_X2600_TUCANA
+	bool "x2600 tucana board"
+config DT_X2660_HALLEY_V10
+	bool "x2660 halley v1.0 board"
+config DT_X2660_HALLEY_V11
+	bool "x2660 halley v1.1 board"
+config DT_X2670_HALLEY_V10
+	bool "x2670 halley v1.0 board"
+config DT_X2600E_HALLEY_V10
+	bool "x2600E halley v1.0 board"
+config DT_X2670M_HARE_V10
+	bool "x2670m hare v1.0 board"
+config DT_X2600_HALLEY_V10
+	bool "x2600 halley v1.0 board"
+config DT_X2600H_HALLEY_V10
+	bool "x2600h halley v1.0 board"

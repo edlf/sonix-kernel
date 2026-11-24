@@ -1,0 +1,1 @@
+../../../../../../../drivers/clk/ingenic/clk-gate.h

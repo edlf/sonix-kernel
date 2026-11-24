@@ -1,0 +1,28 @@
+menuconfig FB_INGENIC_DISPLAYS_STAGE
+	tristate "Supported epd panels and epd powersupply"
+	depends on FB_INGENIC_STAGE
+	depends on SF_EPD_DRIVER
+	select BACKLIGHT_LCD_SUPPORT
+	select LCD_CLASS_DEVICE
+	select BACKLIGHT_CLASS_DEVICE
+
+
+config PANEL_0PM060C1
+	tristate "epd panel 0PM060C1"
+	depends on FB_INGENIC_DISPLAYS_STAGE
+	depends on SF_EPD_DRIVER
+	help
+		epd panel 0PM060C1, for ingenicfb drivers.
+
+config POWER_FP9931
+	tristate "epd panel powersupply FP9931"
+	depends on FB_INGENIC_DISPLAYS_STAGE
+	help
+		epd panel powersupply FP9931.
+
+
+config POWER_TPS65185
+	tristate "epd panel powersupply TPS65185"
+	depends on FB_INGENIC_DISPLAYS_STAGE
+	help
+		epd panel powersupply TPS65185.

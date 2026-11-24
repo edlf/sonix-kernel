@@ -1,0 +1,49 @@
+ 
+&i2c3 {
+	status = "okay";
+	clock-frequency = <100000>;
+	timeout = <1000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c3_pa>;
+
+	/*TWIN612 DVP interface*/
+	twin612_0:twin612@0x3d {
+		status = "ok";
+		compatible = "gd,twin612";
+		reg = <0x3d>;
+		pinctrl-names = "default", "default";
+		pinctrl-0 = <&vic_pa_low_8bit>;
+		pinctrl-1 = <&cim_vic_mclk_pe>;
+
+		port {
+			twin612_ep0:endpoint {
+				remote-endpoint = <&isp0_ep>;
+				bus-width = <8>;	/* Used data lines */
+				data-shift =<0>;	/* Lines 9:0 are used */
+
+				/* If hsync-active/vsync-active are missing,
+				   embedded BT.656 sync is used */
+				hsync-active = <1>;	/* Active high */
+				vsync-active = <1>;	/* Active high */
+				data-active = <1>;	/* Active high */
+				pclk-sample = <1>;	/* Rising */
+				    };
+		};
+	};
+};
+
+
+
+&isp0_ep {
+	remote-endpoint = <&twin612_ep0>;
+	bus-width = <8>;	/* Used data lines */
+	data-shift = <0>;	/* Lines 9:0 are used */
+
+	/* If hsync-active/vsync-active are missing,
+	   embedded BT.656 sync is used */
+	hsync-active = <1>;	/* Active high */
+	vsync-active = <1>;	/* Active high */
+	data-active = <1>;	/* Active high */
+	pclk-sample = <1>;	/* Rising */
+};
+

@@ -1,0 +1,10 @@
+obj-$(CONFIG_INGENIC_CIM_CAMERA_AR0144)		+= ar0144.o
+obj-$(CONFIG_INGENIC_CIM_CAMERA_OV2735B)	+= ov2735b.o
+obj-$(CONFIG_INGENIC_CIM_CAMERA_OV5640)		+= ov5640.o
+obj-$(CONFIG_INGENIC_CIM_CAMERA_BT656_WY827)	+= wy827.o
+obj-$(CONFIG_INGENIC_CIM_CAMERA_DVP_SC031GS) 	+= sc031gs.o
+obj-$(CONFIG_INGENIC_CIM_CAMERA_MIPI_SC031GS) 	+= sc031gs-mipi.o
+obj-$(CONFIG_INGENIC_CIM_CAMERA_DVP_PSD030K) 	+= psd030k.o
+obj-$(CONFIG_INGENIC_CIM_CAMERA_DVP_GC0308) 	+= gc0308.o
+
+ccflags-y += -I$(srctree)/module_drivers/drivers/media/platform/ingenic-cim/

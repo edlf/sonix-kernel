@@ -1,0 +1,34 @@
+&i2c3 {
+	status = "okay";
+	clock-frequency = <100000>;
+	timeout = <1000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c3_pa>;
+
+	/*custom 268-n-3*/
+	imx327_1:imx327@0x1a {
+		status = "ok";
+		compatible = "ovti,imx327";
+		reg = <0x1a>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cim0_vic_mclk_pc>;
+
+		ingenic,mclk = <0>;
+		ingenic,rst-gpio = <&gpa 17 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+
+		port {
+			imx327_ep0:endpoint {
+				remote-endpoint = <&isp0_ep>;
+			};
+		};
+	};
+
+};
+
+
+&isp0_ep {
+	remote-endpoint = <&imx327_ep0>;
+	data-lanes = <0 1>;
+	clk-lanes = <2>;
+};
+

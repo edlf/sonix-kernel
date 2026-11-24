@@ -1,0 +1,76 @@
+&dpu {
+	status = "okay";
+	ingenic,disable-rdma-fb = <1>;
+	ingenic,rot_angle = <0>;
+	//Defines the init state of composer fb export infomations.
+	ingenic,layer-exported = <1 0 0 0>;
+	ingenic,layer-frames   = <3 3 3 2>;
+	ingenic,layer-framesize = <480 272>, <480 272>, <480 272>, <800 480>;   //Max framesize for each layer.
+	layer,color_mode        = <0 0 0 0>;                                    //src fmt,
+	layer,src-size          = <480 272>, <480 272>, <480 272>, <800 480>; //Layer src size should smaller than framesize
+        layer,target-size       = <480 272>, <480 272>, <480 272>, <800 480>;  //Target Size should smaller than src_size.
+	layer,target-pos        = <0 0>, <0 0>, <0 0>, <0 0>; //target pos , the start point of the target panel.
+	layer,enable            = <1 0 0 0>;                                    //layer enabled or disabled.
+	ingenic,logo-pan-layer  = <0>;                                          //on which layer should init logo pan on.
+	memory-region=<&reserved_memory>;
+	port {
+		dpu_out_ep: endpoint {
+		    remote-endpoint = <&panel_sc7283_ep>;
+	    };
+	};
+};
+
+/ {
+	display-dbi {
+		compatible = "simple-bus";
+		#interrupt-cells = <1>;
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <>;
+		panel_sc7283 {
+			compatible = "ingenic,sc7283";
+			status = "okay";
+			pinctrl-names = "default";
+			pinctrl-0 = <&tft_lcd_pb>;
+			ingenic,vdd-en-gpio = <&gpc 11 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+			/*ingenic,lcd-pwm-gpio = <&gpc 12 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;*/
+			port {
+			panel_sc7283_ep: endpoint {
+					remote-endpoint = <&dpu_out_ep>;
+				};
+			};
+		};
+	};
+
+	backlight {
+		compatible = "pwm-backlight";
+	        pinctrl-names = "default";
+	        pinctrl-0 = <&pwm13_pc>;
+		pwms = <&pwm 13 1000000>; /* arg1: pwm channel id [0~15]. arg2: period in ns. */
+		brightness-levels = <0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15>;
+		default-brightness-level = <10>;
+	};
+};
+
+&i2c1 {
+	clock-frequency = <100000>;
+	pinctrl-names = "default";
+	status = "okay";
+	pinctrl-0 = <&i2c1_pb>;
+
+	tsc2007@0x4b{
+		compatible = "ti,tsc2007"; /* do not modify */
+		reg = <0x4b>; /* do not modify */
+		interrupt-parent = <&gpb>; /* INT pin */
+		interrupts = <2>;
+		tsc2007-irq-gpio = <&gpb 2 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;  /* INT pin */
+		ti,poll-period = <20>;
+		ti,x-plate-ohms = <700>;
+		ti,x-max = <480>;
+		ti,y-max = <272>;
+		ti,x-mirror = <0>;
+		ti,y-mirror = <1>;
+		irq-flags = <2>; /* 1 rising, 2 falling */
+	};
+};
+

@@ -1,0 +1,5 @@
+source "module_drivers/drivers/net/wireless/bcmdhd/Kconfig"
+source "module_drivers/drivers/net/wireless/bcmdhd_101_10_361/Kconfig"
+source "module_drivers/drivers/net/wireless/realtek/rtl8723ds/Kconfig"
+source "module_drivers/drivers/net/wireless/realtek/rtl8189fs/Kconfig"
+source "module_drivers/drivers/net/wireless/atbm_wifi/Kconfig"

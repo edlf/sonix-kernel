@@ -1,0 +1,95 @@
+&i2c2 {
+	clock-frequency = <400000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c2_pb>;
+	status = "okay";
+
+	fp9931@0x30{
+		compatible = "fp,fp9931";
+		reg = <0x30>; /* do not modify */
+
+		poweren-gpio = <&gpb 3 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		powerup-gpio = <&gpb 3 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		powergood-gpio = <&gpb 3 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		//tempen = <&gpb 3 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	    port {
+			fp9931_ep:endpoint {
+				remote-endpoint = <&panel_0pm060c1_ep>;
+			};
+		};
+	};
+
+    tps65185@0x68{
+		compatible = "ti,tps65185";
+		reg = <0x68>; /* do not modify */
+
+		//poeren-gpio = <&gpb 3 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		wakeup-gpios = <&gpc 27 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+		vcomctl-gpios = <&gpb 25 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+		powerup-gpios = <&gpc 28 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+		powergood-gpios = <&gpe 24 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+
+		int-gpios = <&gpc 26 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+	    port {
+			tps65185_ep:endpoint {
+				remote-endpoint = <&panel_0pm060c1_ep>;
+			};
+		};
+	};
+};
+
+&dpu {
+	status = "okay";
+	ingenic,disable-rdma-fb = <0>;
+	/*Defines the init state of composer fb export infomations.*/
+	ingenic,layer-exported = <0 0 0 0>;
+	ingenic,layer-frames   = <3 2 2 2>;
+	ingenic,layer-framesize = <720 1280>, <720 1280>, <320 240>, <320 240>;   /*Max framesize for each layer.*/
+	layer,color_mode	= <0 0 0 0>;					/*src fmt,*/
+	layer,src-size       	= <720 1280>, <720 1280>, <320 240>, <240 200>;	/*Layer src size should smaller than framesize*/
+	layer,target-size	= <720 1280>, <720 640>, <160 240>, <240 200>;	/*Target Size should smaller than src_size.*/
+	layer,target-pos	= <0 0>, <0 640>, <340 480>, <100 980>;	/*target pos , the start point of the target panel.*/
+	layer,enable		= <1 1 1 1>;					/*layer enabled or disabled.*/
+	ingenic,logo-pan-layer	= <0>;						/*on which layer should init logo pan on.*/
+	port {
+		dpu_out_ep: endpoint {
+			remote-endpoint = <&panel_0pm060c1_ep>;
+	    };
+	};
+};
+
+lcd_pins: lcd-pins {
+	epd_lcd_pb_16bit: epd-lcd-pb-16bit {
+		ingenic,pinmux = <&gpb 0 15>,<&gpb 24 24>;
+		ingenic,pinmux-funcsel = <PINCTL_FUNCTION1>;
+
+	};
+	epd_lcd_pb_24bit: epd-lcd-pb-24bit {
+		ingenic,pinmux = <&gpb 0 7>, <&gpb 16 21>, <&gpb 24 24>;
+		ingenic,pinmux-funcsel = <PINCTL_FUNCTION1>;
+		ingenic,pincfg = <&gpb 0 7 PINCFG_PACK(PINCTL_CFG_DRIVE_STRENGTH, 7)>,\
+		<&gpb 16 21 PINCFG_PACK(PINCTL_CFG_DRIVE_STRENGTH, 7)>, \
+		<&gpb 24 24 PINCFG_PACK(PINCTL_CFG_DRIVE_STRENGTH, 7)>;
+
+	};
+};
+
+display-dbi {
+	compatible = "simple-bus";
+	#interrupt-cells = <1>;
+	#address-cells = <1>;
+	#size-cells = <1>;
+	ranges = <>;
+
+	panel_0pm060c1 {
+		compatible = "ingenic,0PM060C1";
+		status = "okay";
+		pinctrl-names = "default";
+		pinctrl-0 = <&epd_lcd_pb_24bit>;
+		port {
+			panel_0pm060c1_ep:endpoint {
+				remote-endpoint = <&tps65185_ep>;
+			};
+		};
+	};
+};

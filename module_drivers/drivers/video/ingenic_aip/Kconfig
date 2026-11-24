@@ -1,0 +1,3 @@
+config JZ_AIP
+    tristate "[AIP] ingenic soc jz_aip module"
+    default n

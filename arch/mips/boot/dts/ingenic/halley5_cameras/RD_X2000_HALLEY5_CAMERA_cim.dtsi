@@ -1,0 +1,74 @@
+
+&i2c3 {
+	status = "okay";
+	clock-frequency = <100000>;
+	timeout = <1000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c3_pa>;
+
+	/*RD_X2000_HALLEY5_CAMERA_V4.2 DVP interface*/
+	ov2735_0:ov2735@0x3d {
+		status = "ok";
+		compatible = "ovti,ov2735b";
+		reg = <0x3d>;
+		pinctrl-names = "default", "default";
+		pinctrl-0 = <&vic_pa_low_10bit>;
+		pinctrl-1 = <&cim_vic_mclk_pe>;
+
+		ingenic,rst-gpio = <&gpa 10 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		ingenic,ircutp-gpio = <&gpb 3 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+		ingenic,ircutn-gpio = <&gpb 0 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+
+		port {
+			ov2735_ep0:endpoint {
+				remote-endpoint = <&cim_0>;
+			};
+		};
+	};
+
+	/*RD_X2000_HALLEY5_CAMERA_V5.0 MIPI interface*/
+	AR0144:AR0144@0x18 {
+		status = "ok";
+		compatible = "onsemi,ar0144";
+		reg = <0x18>;
+		pinctrl-names = "default","cim";
+		pinctrl-0 = <&cim_vic_mclk_pe>, <&cim_pa>;
+
+
+		resetb-gpios = <&gpa 11 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+		pwdn-gpios = <&gpa 10 GPIO_ACTIVE_HIGH INGENIC_GPIO_NOBIAS>;
+
+
+		port {
+			AR0144_0:endpoint {
+				remote-endpoint = <&cim_1>;
+			};
+		};
+	};
+
+};
+
+&cim {
+	status = "okay";
+	port {
+		cim_0: endpoint@0 {
+			remote-endpoint = <&ov2735_ep0>;
+			bus-width = <8>;	/* Used data lines */
+			data-shift = <0>;	/* Lines 9:0 are used */
+			bus-type = <5>;
+
+			/* If hsync-active/vsync-active are missing,
+			   embedded BT.656 sync is used */
+			hsync-active = <1>;	/* Active high */
+			vsync-active = <0>;	/* Active high */
+			data-active = <1>;	/* Active high */
+			pclk-sample = <0>;	/* Rising */
+		};
+		cim_1: endpoint@1 {
+			remote-endpoint = <&AR0144_0>;
+			data-lanes = <0 1>;
+			clk-lanes = <2>;
+		};
+	};
+};
+

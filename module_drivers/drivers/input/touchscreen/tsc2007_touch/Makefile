@@ -1,0 +1,5 @@
+
+#obj-$(CONFIG_TOUCHSCREEN_TSC200X_CORE)	+= tsc200x-core.o
+#tsc2007-y := tsc200x-core.o
+tsc2007-$(CONFIG_TOUCHSCREEN_TSC2007_IIO)	+= tsc2007_iio.o
+obj-$(CONFIG_TOUCHSCREEN_TSC2007)	+= tsc2007_core.o

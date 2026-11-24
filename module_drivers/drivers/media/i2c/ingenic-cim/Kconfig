@@ -1,0 +1,51 @@
+comment "ingenic-cim sensor drivers"
+
+config INGENIC_CIM_CAMERA_AR0144
+	tristate "ar0144 support"
+	depends on VIDEO_INGENIC_CIM && I2C
+	help
+	  This is a ar0144 video driver
+
+config INGENIC_CIM_CAMERA_OV2735B
+	tristate "ov2735b support"
+	depends on VIDEO_INGENIC_CIM && I2C
+	help
+	  This is a ov2735b video driver
+
+config INGENIC_CIM_CAMERA_OV5640
+	tristate "ov5640 camera DVP interface support"
+	depends on VIDEO_INGENIC_CIM && I2C
+	help
+	  This is a ingenic-cim camera driver for the OmniVision OV5640 sensor DVP interface
+
+config INGENIC_CIM_CAMERA_BT656_WY827
+	tristate "WY827 camera BT656 interface support"
+	depends on VIDEO_INGENIC_CIM && I2C
+	help
+	  This is a ingenic BT656 camera driver for the WY827 sensor interface
+
+config INGENIC_CIM_CAMERA_DVP_SC031GS
+	tristate "sc031gs dvp interface support"
+	depends on VIDEO_INGENIC_CIM && I2C
+	default n
+	help
+	  This is a sc031gs dvp interface video driver
+
+config INGENIC_CIM_CAMERA_MIPI_SC031GS
+	tristate "sc031gs mipi interface support"
+	depends on VIDEO_INGENIC_CIM && I2C
+	default n
+	help
+	  This is a sc031gs mipi interface video driver
+
+config INGENIC_CIM_CAMERA_DVP_PSD030K
+	tristate "psd030k dvp interface support"
+	depends on VIDEO_INGENIC_CIM && I2C
+	default n
+
+config INGENIC_CIM_CAMERA_DVP_GC0308
+	tristate "gc0308 dvp interface support"
+	depends on VIDEO_INGENIC_CIM && I2C
+	default n
+	help
+	  This is a gc0308 dvp interface video driver

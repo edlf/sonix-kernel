@@ -1,0 +1,11 @@
+config INGENIC_AVPU_V2
+	tristate "[VPU] ingenic soc avpu version 2(EL200) module"
+	depends on SOC_X2580
+	select VIDEOBUF2_DMA_CONTIG
+	select VIDEOBUF2_DMA_CONTIG_INGENIC
+	default n
+	help
+		this is ingenic avpu for x2580, support h264/h265/jpeg encoder.
+
+
+

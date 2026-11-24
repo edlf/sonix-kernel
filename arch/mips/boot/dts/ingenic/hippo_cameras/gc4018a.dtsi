@@ -1,0 +1,29 @@
+&i2c0 {
+	status = "okay";
+	clock-frequency = <100000>;
+	timeout = <1000>;
+	pinctrl-names = "default";
+	pinctrl-0 = <&i2c0_pa>;
+
+	gc4018a_0:gc4018a@0x30 {
+		status = "ok";
+		compatible = "smartsens,gc4018a";
+		reg = <0x30>;
+		pinctrl-names = "default";
+		pinctrl-0 = <&cim0_vic_mclk_pc>;
+
+		ingenic,mclk = <0>;
+		ingenic,rst-gpio = <&gpa 17 GPIO_ACTIVE_LOW INGENIC_GPIO_NOBIAS>;
+
+		port {
+			gc4018a_ep0:endpoint {
+				remote-endpoint = <&isp0_ep>;
+			};
+		};
+	};
+};
+&isp0_ep {
+	remote-endpoint = <&gc4018a_ep0>;
+	data-lanes = <0 1 3 4>;
+	clk-lanes = <2>;
+};
