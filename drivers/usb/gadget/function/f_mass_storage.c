@@ -3027,7 +3027,9 @@ static int fsg_bind(struct usb_configuration *c, struct usb_function *f)
 					  fsg->common->can_stall);
 		if (ret)
 			return ret;
-		fsg_common_set_inquiry_string(fsg->common, NULL, NULL);
+		/* The default only: a string written through configfs stays. */
+		if (!fsg->common->inquiry_string[0])
+			fsg_common_set_inquiry_string(fsg->common, NULL, NULL);
 	}
 
 	if (!common->thread_task) {
@@ -3142,6 +3144,43 @@ static struct configfs_item_operations fsg_lun_item_ops = {
 	.release		= fsg_lun_attr_release,
 };
 
+/*
+ * The SCSI INQUIRY identity: vendor (8), product (16) and revision (4),
+ * space padded, as one string. A trailing newline is dropped and anything
+ * past 28 characters is cut, so "echo" works and the reply stays well formed.
+ */
+static ssize_t fsg_inquiry_string_show(struct fsg_opts *opts, char *page)
+{
+	ssize_t ret;
+
+	mutex_lock(&opts->lock);
+	ret = sprintf(page, "%s\n", opts->common->inquiry_string);
+	mutex_unlock(&opts->lock);
+
+	return ret;
+}
+
+static ssize_t fsg_inquiry_string_store(struct fsg_opts *opts,
+					const char *page, size_t len)
+{
+	char *inquiry = opts->common->inquiry_string;
+	const size_t max = sizeof(opts->common->inquiry_string) - 1;
+	size_t n = len;
+
+	if (n && page[n - 1] == '\n')
+		n--;
+	if (n > max)
+		n = max;
+
+	mutex_lock(&opts->lock);
+	memcpy(inquiry, page, n);
+	memset(inquiry + n, ' ', max - n);
+	inquiry[max] = '\0';
+	mutex_unlock(&opts->lock);
+
+	return len;
+}
+
 static ssize_t fsg_lun_opts_file_show(struct config_item *item, char *page)
 {
 	struct fsg_lun_opts *opts = to_fsg_lun_opts(item);
@@ -3221,12 +3260,37 @@ static ssize_t fsg_lun_opts_nofua_store(struct config_item *item,
 
 CONFIGFS_ATTR(fsg_lun_opts_, nofua);
 
+/*
+ * Per LUN on later kernels; here every LUN shares the function's string, so
+ * this is the function-level inquiry_string under another name.
+ */
+static ssize_t fsg_lun_opts_inquiry_string_show(struct config_item *item,
+						char *page)
+{
+	struct fsg_lun_opts *opts = to_fsg_lun_opts(item);
+
+	return fsg_inquiry_string_show(
+		to_fsg_opts(opts->group.cg_item.ci_parent), page);
+}
+
+static ssize_t fsg_lun_opts_inquiry_string_store(struct config_item *item,
+						 const char *page, size_t len)
+{
+	struct fsg_lun_opts *opts = to_fsg_lun_opts(item);
+
+	return fsg_inquiry_string_store(
+		to_fsg_opts(opts->group.cg_item.ci_parent), page, len);
+}
+
+CONFIGFS_ATTR(fsg_lun_opts_, inquiry_string);
+
 static struct configfs_attribute *fsg_lun_attrs[] = {
 	&fsg_lun_opts_attr_file,
 	&fsg_lun_opts_attr_ro,
 	&fsg_lun_opts_attr_removable,
 	&fsg_lun_opts_attr_cdrom,
 	&fsg_lun_opts_attr_nofua,
+	&fsg_lun_opts_attr_inquiry_string,
 	NULL,
 };
 
@@ -3368,6 +3432,20 @@ static ssize_t fsg_opts_stall_store(struct config_item *item, const char *page,
 
 CONFIGFS_ATTR(fsg_opts_, stall);
 
+static ssize_t fsg_opts_inquiry_string_show(struct config_item *item,
+					    char *page)
+{
+	return fsg_inquiry_string_show(to_fsg_opts(item), page);
+}
+
+static ssize_t fsg_opts_inquiry_string_store(struct config_item *item,
+					     const char *page, size_t len)
+{
+	return fsg_inquiry_string_store(to_fsg_opts(item), page, len);
+}
+
+CONFIGFS_ATTR(fsg_opts_, inquiry_string);
+
 #ifdef CONFIG_USB_GADGET_DEBUG_FILES
 static ssize_t fsg_opts_num_buffers_show(struct config_item *item, char *page)
 {
@@ -3414,6 +3492,7 @@ CONFIGFS_ATTR(fsg_opts_, num_buffers);
 
 static struct configfs_attribute *fsg_attrs[] = {
 	&fsg_opts_attr_stall,
+	&fsg_opts_attr_inquiry_string,
 #ifdef CONFIG_USB_GADGET_DEBUG_FILES
 	&fsg_opts_attr_num_buffers,
 #endif

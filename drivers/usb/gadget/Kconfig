@@ -187,6 +187,9 @@ config USB_F_UAC1
 config USB_F_UAC2
 	tristate
 
+config USB_F_UAC_SA
+	tristate
+
 config USB_F_UVC
 	tristate
 
@@ -429,6 +432,17 @@ config USB_CONFIGFS_F_UAC2
 	  application may choose to do whatever it wants with the data
 	  received from the USB Host and choose to provide whatever it
 	  wants as audio data to the USB Host.
+
+config USB_CONFIGFS_F_UAC_SA
+	bool "USB DAC (uac_sa)"
+	depends on USB_CONFIGFS
+	select USB_LIBCOMPOSITE
+	select USB_F_UAC_SA
+	help
+	  An asynchronous USB Audio Class 2.0 speaker with explicit feedback
+	  whose stream user space reads from /dev/uac_sa: the player as a
+	  USB DAC for a computer or a phone. PCM up to 384 kHz and, when
+	  enabled, native DSD. The function is "uac_sa" in configfs.
 
 config USB_CONFIGFS_F_MIDI
 	bool "MIDI function"

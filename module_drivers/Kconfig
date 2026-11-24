@@ -7,5 +7,6 @@ config OUTSIDE_DRIVERS_PATH
 
 source "$OUTSIDE_DRIVERS/drivers/Kconfig"
 source "$OUTSIDE_DRIVERS/sound/soc/ingenic/Kconfig"
+source "$OUTSIDE_DRIVERS/hiby/Kconfig"
 
 endmenu

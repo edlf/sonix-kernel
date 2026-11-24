@@ -39,9 +39,14 @@
 
 #define SFC_REG_DEBUG
 
+// Private to this file: a global __assert would clash with the one utils
+// exports to the HiBy modules when utils is built in.
+static void __maybe_unused sfc_assert(const char *file, int line, struct sfc *sfc, const char *cond)
+	    __attribute__ ((__noreturn__));
+
 #define SFC_ASSERT(sfc, cond) do {				\
     if (!(cond)) {						\
-        __assert(__FILE__, __LINE__, sfc, #cond);		\
+        sfc_assert(__FILE__, __LINE__, sfc, #cond);		\
     }								\
 } while (0)
 
@@ -164,7 +169,7 @@ void dump_sfc_debug(struct sfc *sfc)
 
 #endif
 
-void __assert(const char *file, int line, struct sfc *sfc, const char *cond)
+static void __maybe_unused sfc_assert(const char *file, int line, struct sfc *sfc, const char *cond)
 {
     printk("assert %s failed in %s %d\n", cond, file, line);
 #ifdef SFC_REG_DEBUG

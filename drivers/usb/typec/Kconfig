@@ -1,0 +1,23 @@
+
+menuconfig TYPEC
+	tristate "USB Type-C Support"
+	help
+	  USB Type-C connector class: exposes the ports, their partners and
+	  their roles under /sys/class/typec. Taken from Linux 4.16.
+
+if TYPEC
+
+config TYPEC_TCPM
+	tristate "USB Type-C Port Controller Manager"
+	depends on USB
+	help
+	  The Type-C Port Controller Manager provides a USB PD and USB Type-C
+	  state machine for use with Type-C Port Controllers.
+
+if TYPEC_TCPM
+
+source "drivers/usb/typec/fusb302/Kconfig"
+
+endif # TYPEC_TCPM
+
+endif # TYPEC

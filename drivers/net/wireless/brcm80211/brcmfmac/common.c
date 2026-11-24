@@ -15,6 +15,7 @@
  */
 
 #include <linux/kernel.h>
+#include <linux/module.h>
 #include <linux/string.h>
 #include <linux/netdevice.h>
 #include <brcmu_wifi.h>
@@ -32,6 +33,37 @@ const u8 ALLFFMAC[ETH_ALEN] = { 0xff, 0xff, 0xff, 0xff, 0xff, 0xff };
 #define BRCMF_DEFAULT_BCN_TIMEOUT	3
 #define BRCMF_DEFAULT_SCAN_CHANNEL_TIME	40
 #define BRCMF_DEFAULT_SCAN_UNASSOC_TIME	40
+
+#define BRCMF_MIN_SCAN_ASSOC_TIME		10
+#define BRCMF_MAX_SCAN_ASSOC_TIME		40
+
+unsigned int brcmf_scan_assoc_time = BRCMF_DEFAULT_SCAN_CHANNEL_TIME;
+
+static int brcmf_scan_assoc_time_set(const char *val,
+				     const struct kernel_param *kp)
+{
+	unsigned int scan_assoc_time;
+	int err;
+
+	err = kstrtouint(val, 10, &scan_assoc_time);
+	if (err)
+		return err;
+	if (scan_assoc_time < BRCMF_MIN_SCAN_ASSOC_TIME ||
+	    scan_assoc_time > BRCMF_MAX_SCAN_ASSOC_TIME)
+		return -EINVAL;
+
+	*(unsigned int *)kp->arg = scan_assoc_time;
+	return 0;
+}
+
+static const struct kernel_param_ops brcmf_scan_assoc_time_ops = {
+	.set = brcmf_scan_assoc_time_set,
+	.get = param_get_uint,
+};
+module_param_cb(scan_assoc_time, &brcmf_scan_assoc_time_ops,
+		&brcmf_scan_assoc_time, 0444);
+MODULE_PARM_DESC(scan_assoc_time,
+		 "Associated scan channel dwell time in ms (10-40)");
 
 /* boost value for RSSI_DELTA in preferred join selection */
 #define BRCMF_JOIN_PREF_RSSI_BOOST	8
@@ -158,7 +190,7 @@ int brcmf_c_preinit_dcmds(struct brcmf_if *ifp)
 
 	/* Setup default scan channel time */
 	err = brcmf_fil_cmd_int_set(ifp, BRCMF_C_SET_SCAN_CHANNEL_TIME,
-				    BRCMF_DEFAULT_SCAN_CHANNEL_TIME);
+				    brcmf_scan_assoc_time);
 	if (err) {
 		brcmf_err("BRCMF_C_SET_SCAN_CHANNEL_TIME error (%d)\n",
 			  err);

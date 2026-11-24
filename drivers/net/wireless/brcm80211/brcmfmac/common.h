@@ -16,6 +16,7 @@
 #define BRCMFMAC_COMMON_H
 
 extern const u8 ALLFFMAC[ETH_ALEN];
+extern unsigned int brcmf_scan_assoc_time;
 
 /* Sets dongle media info (drv_version, mac address). */
 int brcmf_c_preinit_dcmds(struct brcmf_if *ifp);

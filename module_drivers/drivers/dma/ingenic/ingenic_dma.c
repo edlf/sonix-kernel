@@ -232,8 +232,7 @@ static unsigned int build_one_slave_desc(struct ingenic_dma_chan *dmac, dma_addr
 		struct hdma_desc *desc)
 {
 	enum dma_transfer_direction dir;
-	/* unsigned int rdil; */
-	unsigned int tsz, transfer_shift;
+	unsigned int burst, rdil;
 
 	desc->dcm = dmac->dcm;
 	desc->drt = dmac->slave_id;
@@ -260,10 +259,23 @@ static unsigned int build_one_slave_desc(struct ingenic_dma_chan *dmac, dma_addr
 		BUG();
 	}
 
-	tsz = get_max_tsz(dmac->maxburst, &transfer_shift);
-	desc->dtc = length >> transfer_shift; /* in burst unit */
-	desc->dcm |= tsz << DCM_TSZ_SFT;
-	return desc->dtc << transfer_shift;
+	/*
+	 * As on the vendor kernel: the controller picks the transfer size
+	 * itself (TSZ auto, so the count is in bytes) and each request from the
+	 * peripheral moves one whole burst of maxburst words (RDIL). A fixed
+	 * transfer size with RDIL 0 moves a single word per request instead.
+	 */
+	burst = dmac->maxburst * dmac->transfer_width;
+	if (burst < 5)
+		rdil = burst;
+	else
+		rdil = min(fls(burst) + 1, DCM_RDIL_MAX);
+	desc->dcm |= DCM_TSZ_AUTO << DCM_TSZ_SFT | rdil << DCM_RDIL_SFT;
+
+	WARN_ON(length & ~DTC_TC_MSK);
+	WARN_ON(length & (dmac->transfer_width - 1));
+	desc->dtc = length & ~(dmac->transfer_width - 1) & DTC_TC_MSK;
+	return desc->dtc;
 }
 
 static void ingenic_dma_free_swdesc(struct virt_dma_desc *vd)
@@ -575,6 +587,81 @@ static struct dma_async_tx_descriptor* ingenic_dma_prep_dma_sg(
 		return NULL;
 
 	build_dma_sg_desc(sdesc, dst_sg, dst_nents, src_sg, src_nents);
+
+	/* use 8-word descriptors */
+	sdesc->dcs = DCS_DES8;
+
+	return vchan_tx_prep(&dmac->vc, &sdesc->vd, flags);
+}
+
+/*
+ * 2D memory to memory: numf lines of sgl[0].size bytes, each followed by a
+ * gap of src_icg bytes on the source side and dst_icg on the destination.
+ * The controller's stride mode takes up to 255 lines per descriptor, so the
+ * lines are spread over a chain. One chunk per frame only, of at most 7680
+ * bytes, both sides incrementing and scatter-gathered -- the shape the vendor
+ * kernel accepts, which is what its sa_hgl_dma module asks for.
+ */
+#define INTERLEAVED_MAX_LINES	255
+#define INTERLEAVED_MAX_SIZE	0x1e00
+
+static struct dma_async_tx_descriptor *ingenic_dma_prep_interleaved_dma(
+		struct dma_chan *chan, struct dma_interleaved_template *xt,
+		unsigned long flags)
+{
+	struct ingenic_dma_chan *dmac = to_ingenic_dma_chan(chan);
+	struct ingenic_dma_sdesc *sdesc;
+	struct data_chunk *chunk = &xt->sgl[0];
+	dma_addr_t src, dst;
+	size_t lines;
+	int i, nb;
+
+	if (!xt->src_inc || !xt->dst_inc || !xt->src_sgl || !xt->dst_sgl)
+		return NULL;
+	if (!xt->numf || xt->frame_size != 1 ||
+	    chunk->size > INTERLEAVED_MAX_SIZE)
+		return NULL;
+	/* Reject gaps the hardware cannot represent without truncation. */
+	if ((s32)chunk->src_icg != (s16)chunk->src_icg ||
+	    (s32)chunk->dst_icg != (s16)chunk->dst_icg)
+		return NULL;
+
+	nb = DIV_ROUND_UP(xt->numf, INTERLEAVED_MAX_LINES);
+	sdesc = ingenic_dma_alloc_swdesc(dmac, nb);
+	if (!sdesc)
+		return NULL;
+
+	sdesc->len = xt->numf * chunk->size;
+	lines = xt->numf;
+	src = xt->src_start;
+	dst = xt->dst_start;
+
+	for (i = 0; i < nb; i++) {
+		struct hdma_desc *desc = sdesc->hw_desc[i];
+		size_t count = min_t(size_t, lines, INTERLEAVED_MAX_LINES);
+
+		desc->dcm = DCM_SAI | DCM_DAI |
+			    (DCM_RDIL_MAX << DCM_RDIL_SFT) |
+			    (DCM_TSZ_AUTO << DCM_TSZ_SFT) |
+			    DCM_STDE | DCM_LINK;
+		/* line length in bytes, line count above it */
+		desc->dtc = chunk->size | count << 16;
+		desc->dsa = src;
+		desc->dta = dst;
+		/* Each signed gap occupies only its own 16-bit field. */
+		desc->sd = (u32)(u16)chunk->dst_icg << 16 |
+			   (u16)chunk->src_icg;
+		desc->drt = INGENIC_DMA_REQ_AUTO_TX;
+		if (i)
+			sdesc->hw_desc[i - 1]->dtc |=
+				PHY_TO_DESC_DOA(sdesc->hw_desc_dma[i]);
+
+		lines -= count;
+		src += (chunk->size + chunk->src_icg) * count;
+		dst += (chunk->size + chunk->dst_icg) * count;
+	}
+	sdesc->hw_desc[nb - 1]->dcm =
+		(sdesc->hw_desc[nb - 1]->dcm & ~(DCM_LINK | DCM_TIE)) | DCM_TIE;
 
 	/* use 8-word descriptors */
 	sdesc->dcs = DCS_DES8;
@@ -1158,6 +1245,8 @@ static int __init ingenic_dma_probe(struct platform_device *pdev)
 	dma_cap_set(DMA_SG, dma->dma_device.cap_mask);
 	dma_cap_set(DMA_SLAVE, dma->dma_device.cap_mask);
 	dma_cap_set(DMA_CYCLIC, dma->dma_device.cap_mask);
+	dma_cap_set(DMA_INTERLEAVE, dma->dma_device.cap_mask);
+	dma_cap_set(DMA_PRIVATE, dma->dma_device.cap_mask);
 
 	dma->dma_device.dev = &pdev->dev;
 	dma->dma_device.device_alloc_chan_resources = ingenic_dma_alloc_chan_resources;
@@ -1167,6 +1256,7 @@ static int __init ingenic_dma_probe(struct platform_device *pdev)
 	dma->dma_device.device_prep_dma_sg = ingenic_dma_prep_dma_sg;
 	dma->dma_device.device_prep_dma_cyclic = ingenic_dma_prep_dma_cyclic;
 	dma->dma_device.device_prep_dma_memcpy = ingenic_dma_prep_dma_memcpy;
+	dma->dma_device.device_prep_interleaved_dma = ingenic_dma_prep_interleaved_dma;
 	dma->dma_device.device_config = ingenic_dma_config;
 	dma->dma_device.device_terminate_all = ingenic_dma_terminate_all;
 	dma->dma_device.device_issue_pending = ingenic_dma_issue_pending;

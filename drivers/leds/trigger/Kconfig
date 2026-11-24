@@ -41,6 +41,14 @@ config LEDS_TRIGGER_IDE_DISK
 	  This allows LEDs to be controlled by IDE disk activity.
 	  If unsure, say Y.
 
+config LEDS_TRIGGER_BREATHING
+	tristate "LED Breathing Trigger"
+	depends on LEDS_TRIGGERS
+	help
+	  Fades the LED up and down, breaths_per_min times a minute. The
+	  trigger the vendor firmware uses for the charging LED.
+	  If unsure, say Y.
+
 config LEDS_TRIGGER_HEARTBEAT
 	tristate "LED Heartbeat Trigger"
 	depends on LEDS_TRIGGERS

@@ -2425,6 +2425,7 @@ brcmf_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev,
 	u32 is_tdls_peer;
 	s32 total_rssi;
 	s32 count_rssi;
+	struct brcmf_scb_val_le scb_val;
 	u32 i;
 
 	brcmf_dbg(TRACE, "Enter, MAC %pM\n", mac);
@@ -2508,6 +2509,20 @@ brcmf_cfg80211_get_station(struct wiphy *wiphy, struct net_device *ndev,
 		}
 	}
 done:
+	/* In station mode the firmware can leave the per-antenna RSSI of the
+	 * AP empty, or fail sta_info: the RSSI of the link is then asked for
+	 * directly.
+	 */
+	if (!(sinfo->filled & BIT(NL80211_STA_INFO_SIGNAL)) &&
+	    test_bit(BRCMF_VIF_STATUS_CONNECTED, &ifp->vif->sme_state)) {
+		memset(&scb_val, 0, sizeof(scb_val));
+		if (!brcmf_fil_cmd_data_get(ifp, BRCMF_C_GET_RSSI, &scb_val,
+					    sizeof(scb_val))) {
+			sinfo->filled |= BIT(NL80211_STA_INFO_SIGNAL);
+			sinfo->signal = le32_to_cpu(scb_val.val);
+			err = 0;
+		}
+	}
 	brcmf_dbg(TRACE, "Exit\n");
 	return err;
 }
@@ -6013,7 +6028,7 @@ static s32 brcmf_config_dongle(struct brcmf_cfg80211_info *cfg)
 	/* make sure RF is ready for work */
 	brcmf_fil_cmd_int_set(ifp, BRCMF_C_UP, 0);
 
-	brcmf_dongle_scantime(ifp, WL_SCAN_CHANNEL_TIME,
+	brcmf_dongle_scantime(ifp, brcmf_scan_assoc_time,
 			      WL_SCAN_UNASSOC_TIME, WL_SCAN_PASSIVE_TIME);
 
 	power_mode = cfg->pwr_save ? PM_FAST : PM_OFF;

@@ -1,0 +1,149 @@
+menuconfig HIBY_MODULES
+	bool "Open replacements for HiBy's closed modules"
+	help
+	  Builds the open drop-in replacements for HiBy's closed modules
+	  (from hiby-custom-kernel): the ones in common/ and the ones in the
+	  folder of the board chosen below. They are modules, except the ones
+	  below that are set to y, which are built into the kernel.
+
+if HIBY_MODULES
+
+config HIBY_MODEL
+	string "HiBy board"
+	default "r1"
+	help
+	  The board the modules are built for: a folder in
+	  module_drivers/hiby/ (r1 or r3proii).
+
+comment "Modules that can be built in"
+
+# Only modules whose built-in defaults are the values the board's stock .sh
+# passes, and that need nothing from a module, can be y: a built-in driver
+# gets no insmod parameters and cannot call into a module. The defaults of
+# the common ones come from HIBY_BOARD_<board> (see the Makefile): the R1's and
+# the R3 Pro II's are in. Each "depends on" below is what the driver calls
+# into, so a module it needs keeps it a module too.
+
+config HIBY_UTILS
+	tristate "utils: helpers the other HiBy modules link against"
+	default m
+	help
+	  Pin names, gpio_set_func(), word splitting, i2c_register_device()
+	  and the other helpers the HiBy modules and the closed Wi-Fi drivers
+	  import. Built in, the closed modules still load against it.
+
+config HIBY_SOC_UTILS
+	tristate "soc_utils: 32 kHz clock out for the Wi-Fi/Bluetooth chip"
+	depends on HIBY_UTILS
+	default m
+	help
+	  ingenic_rtc32k_enable/disable on PC26. Stock: rtc32k_init_on=0,
+	  the default.
+
+config HIBY_SOC_GPIO
+	tristate "soc_gpio: /dev/gpio"
+	depends on HIBY_UTILS
+	default m
+	help
+	  Pin function, pull and level by name, through ioctls. Stock:
+	  debug=0, the default.
+
+config HIBY_SOC_PWM
+	tristate "soc_pwm: the X1600 PWM controller"
+	depends on HIBY_UTILS
+	default m
+	help
+	  pwm2_request() and the rest for the backlight and LEDs, and
+	  /dev/jz_pwm. Takes no parameters.
+
+config HIBY_SOC_ADC
+	tristate "soc_adc: the X1600 SAR ADC"
+	default m
+	help
+	  adc_read_channel_voltage() for the key, jack and remote modules, and
+	  /dev/jz_adc_aux_0..3. Stock: adc_vref=3300, the default.
+
+config HIBY_SOC_EFUSE
+	tristate "soc_efuse: the X1600 efuse"
+	depends on HIBY_UTILS
+	default m
+	help
+	  /proc/jz/efuse and /dev/efuse-string-version. Stock:
+	  gpio_efuse_vddq=-1, the default.
+
+config HIBY_SA_CONFIG
+	tristate "sa_config_module: /dev/sa-config"
+	default m
+	help
+	  Reports the model (HIBY_MODEL) and firmware name. Takes no
+	  parameters.
+
+config HIBY_SOC_I2C
+	tristate "soc_i2c: the X1600 I2C controllers"
+	depends on HIBY_UTILS
+	default m
+	help
+	  Adapters 0 and 1, for the PMIC, fuel gauge, touch panel and the
+	  other on-board chips. Both on at 400 kHz, i2c1 on PB19/PB20, i2c0 on
+	  PA28/PA29 (R1) or PB30/PB31 (R3 Pro II).
+
+config HIBY_SOC_AIC
+	tristate "soc_aic: the X1600 I2S controller"
+	depends on HIBY_UTILS && SND_SOC
+	default m
+	help
+	  The ASoC CPU DAI and platform "ingenic-aic". Both boards:
+	  aic_select_clk=2, 120 ms of silence before the first sample.
+
+config HIBY_CW2015
+	tristate "cw2015: the CW2015 fuel gauge"
+	depends on HIBY_SOC_I2C && POWER_SUPPLY
+	default m
+	help
+	  The power supply "battery": I2C bus 0 and the board's battery
+	  profile.
+
+config HIBY_PWM_BACKLIGHT
+	tristate "pwm_backlight: the display backlight"
+	depends on HIBY_SOC_PWM && BACKLIGHT_CLASS_DEVICE
+	default m
+	help
+	  PC00, 101 levels, "backlight_pwm0", off at start; 30 kHz (R1) or
+	  10 kHz (R3 Pro II).
+
+config HIBY_SA_SOUND_SWITCH
+	tristate "sa_sound_switch: what is plugged into the outputs"
+	depends on HIBY_UTILS && HIBY_SOC_ADC && SWITCH
+	default m
+	help
+	  /sys/class/switch/headset and the others, get_switch_status().
+	  The headset on ADC channel 1, 2800 to 3300 mV (R1) or 0 to
+	  2000 mV (R3 Pro II); on the R3 Pro II the balanced output on PC24,
+	  high when plugged.
+
+config HIBY_LEDS_PWM_ADD
+	tristate "leds_pwm_add: the R1's red and blue LEDs"
+	depends on HIBY_MODEL = "r1"
+	depends on HIBY_SOC_PWM && LEDS_CLASS
+	default m
+	help
+	  Red on PC01 (breathing trigger) and blue on PC02.
+
+config HIBY_TCS1421_ADD
+	tristate "tcs1421_add: the R1's TCS1421 Type-C port controller"
+	depends on HIBY_MODEL = "r1"
+	depends on HIBY_UTILS
+	default m
+	help
+	  The CFG pins PA09 and PB24, set through tcs1421_cfg.
+
+config HIBY_KEYBOARD_ADC_MULTIFUNC
+	tristate "keyboard_adc_multifunc: the R1's keys on the ADC"
+	depends on HIBY_MODEL = "r1"
+	depends on HIBY_SOC_ADC && INPUT
+	default m
+	help
+	  Three keys on channel 0: 164 at 0 mV, 114 at 1000 mV and 115 at
+	  1650 mV.
+
+endif

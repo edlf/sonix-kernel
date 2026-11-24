@@ -1690,6 +1690,32 @@ static void reserve_highatomic_pageblock(struct page *page, struct zone *zone,
 	unsigned long max_managed, flags;
 
 	/*
+	 * Refuse entirely when one pageblock is a large fraction of the whole
+	 * zone. This board sets CONFIG_FORCE_MAX_ZONEORDER=15, giving
+	 * pageblock_nr_pages == 16384 (64MB) against a single ~56MB Normal
+	 * zone -- so reserving even one pageblock converts the ENTIRE zone to
+	 * MIGRATE_HIGHATOMIC, after which every non-atomic allocation fails
+	 * while free memory looks abundant. Observed on real hardware: OOM
+	 * (and eventually "Out of memory and no killable processes" panic)
+	 * with 38MB free, every free block tagged (H).
+	 *
+	 * The existing cap below cannot prevent this: max_managed works out to
+	 * managed/100 + pageblock_nr_pages, which here is ~66MB -- larger than
+	 * the 56MB zone, so nr_reserved_highatomic can never reach it and the
+	 * check never fires.
+	 *
+	 * The reserve is an optimisation for high-order atomic allocations,
+	 * not a correctness requirement; declining it simply means those come
+	 * from the normal free lists, which is the behaviour on a kernel that
+	 * never happens to take this path at all. Guarding here rather than
+	 * lowering FORCE_MAX_ZONEORDER deliberately: that would also shrink the
+	 * largest contiguous allocation available to the vendor's DMA-hungry
+	 * closed-source drivers, which is a much riskier change.
+	 */
+	if (pageblock_nr_pages * 4 > zone->managed_pages)
+		return;
+
+	/*
 	 * Limit the number reserved to 1 pageblock or roughly 1% of a zone.
 	 * Check is race-prone but harmless.
 	 */

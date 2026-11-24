@@ -6,3 +6,4 @@
 obj-$(CONFIG_BUILTIN_DTB) += dts/
 obj-y += drivers/
 obj-y += sound/
+obj-$(CONFIG_HIBY_MODULES) += hiby/

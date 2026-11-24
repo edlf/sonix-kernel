@@ -1122,13 +1122,15 @@ static int _gpiod_direction_output_raw(struct gpio_desc *desc, int value)
 	struct gpio_chip	*chip;
 	int			status = -EINVAL;
 
-	/* GPIOs used for IRQs shall not be set as output */
-	if (test_bit(FLAG_USED_AS_IRQ, &desc->flags)) {
+	/*
+	 * A GPIO used for an IRQ is still driven, as on the vendor kernel:
+	 * touch controllers like the GT9xx select their address and wake up
+	 * by driving their interrupt line during a reset.
+	 */
+	if (test_bit(FLAG_USED_AS_IRQ, &desc->flags))
 		gpiod_err(desc,
 			  "%s: tried to set a GPIO tied to an IRQ as output\n",
 			  __func__);
-		return -EIO;
-	}
 
 	/* Open drain pin should not be driven to 1 */
 	if (value && test_bit(FLAG_OPEN_DRAIN,  &desc->flags))

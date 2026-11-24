@@ -34,9 +34,6 @@ void write_cdt(struct sfc *sfc, struct sfc_cdt *cdt, uint16_t start_index, uint1
 int32_t set_flash_timing(struct sfc *, uint32_t, uint32_t, uint32_t, uint32_t);
 int32_t sfc_clk_set_highspeed(struct sfc *);
 
-void __assert(const char *file, int line, struct sfc *sfc, const char *cond)
-	    __attribute__ ((__noreturn__));
-
 #if defined(CONFIG_SOC_X2580)
 int x2580_sfc_change_io_function(int is_quad);
 #endif
