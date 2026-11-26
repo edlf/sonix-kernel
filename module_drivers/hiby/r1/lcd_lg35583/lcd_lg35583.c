@@ -20,6 +20,11 @@
 // sets the value the LG35583's register C700 gets at the next power_on;
 // reading prints the register and its value to the kernel log.
 //
+// The power sequencing is that of firmware 2.0: VCCIO 50 ms ahead of VCC,
+// VCC down 50 ms before VCCIO, Display Off and Sleep In on both panels, at
+// least 30 jiffies off between power_off and power_on, and a reboot notifier
+// that powers the panel off on halt and power off.
+//
 // Unloading leaves the panel registered: jzfb_unregister_lcd() would take the
 // framebuffer down with it.
 //
@@ -31,7 +36,9 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/moduleparam.h>
+#include <linux/jiffies.h>
 #include <linux/proc_fs.h>
+#include <linux/reboot.h>
 #include <linux/regulator/consumer.h>
 #include <linux/string.h>
 #include <linux/uaccess.h>
@@ -62,6 +69,7 @@ struct lcdc_data {
 	int (*power_on)(void *unused);
 	int (*power_off)(void *unused);
 	unsigned int reserved;
+	int (*before_power_off)(void *unused);	// firmware 2.0; NULL here
 };
 
 // Exported by soc_fb.ko.
@@ -103,6 +111,13 @@ static int lcd_id_vol;		// mV on the ID channel
 static int lcd_id;		// 0: LG35583, 1: ST7701S
 static struct proc_dir_entry *lcd_reg_entry;
 static bool lcd_reg_done;	// creation tried
+static bool lcd_powered;	// between power_on and power_off
+static bool lcd_was_off;	// lcd_off_jiffies is set
+static unsigned long lcd_off_jiffies;	// when power_off last ran
+
+// The panel stays off at least this long before it is powered again (30
+// jiffies, as in firmware 2.0: 300 ms at HZ=100).
+#define LCD_MIN_OFF_JIFFIES	30
 
 // The LG35583 register /proc/lcd_reg sets, and its value.
 static struct {
@@ -469,16 +484,25 @@ static void st7701s_init_panel(void)
 	}
 }
 
+// The sequencing of firmware 2.0: VCCIO well ahead of VCC, and a minimum
+// time off since the last power_off.
 static int lg35583_power_on(void *unused)
 {
-	gpio_set_value(gpio_spi_cs, 1);
+	if (lcd_was_off) {
+		unsigned long ready = lcd_off_jiffies + LCD_MIN_OFF_JIFFIES;
+
+		if (time_before(jiffies, ready))
+			msleep(jiffies_to_msecs(ready - jiffies));
+	}
+
 	if (gpio_lcd_power_en >= 0)
 		gpio_set_value(gpio_lcd_power_en, 1);
 
 	if (vccio_regulator) {
 		regulator_enable(vccio_regulator);
-		usleep_range(5000, 5000);
+		usleep_range(50000, 50000);
 	}
+	gpio_set_value(gpio_spi_cs, 1);
 	if (vcc_regulator) {
 		regulator_enable(vcc_regulator);
 		usleep_range(5000, 5000);
@@ -510,24 +534,33 @@ static int lg35583_power_on(void *unused)
 			printk("create_proc_entry %s failed\n", "lcd_reg");
 		lcd_reg_done = true;
 	}
+	lcd_powered = true;
 	return 0;
 }
 
+// As firmware 2.0: Display Off and Sleep In on either panel, then VCC
+// down well before VCCIO.
 static int lg35583_power_off(void *unused)
 {
-	if (!lcd_id) {
+	if (lcd_id) {
+		m_spi_write_addr_8(CMD(0x28));	// Display Off
+		usleep_range(5000, 5000);
+		m_spi_write_addr_8(CMD(0x10));	// Sleep In
+	} else {
 		spi_writecomm(0x2800);		// Display Off
 		usleep_range(5000, 5000);
 		spi_writecomm(0x1000);		// Sleep In
-		usleep_range(5000, 5000);
 	}
+	usleep_range(5000, 5000);
 
 	if (gpio_lcd_rst >= 0)
 		gpio_set_value(gpio_lcd_rst, 0);
+	if (vcc_regulator) {
+		regulator_disable(vcc_regulator);
+		usleep_range(50000, 50000);
+	}
 	if (vccio_regulator)
 		regulator_disable(vccio_regulator);
-	if (vcc_regulator)
-		regulator_disable(vcc_regulator);
 	if (gpio_lcd_power_en >= 0)
 		gpio_set_value(gpio_lcd_power_en, 0);
 
@@ -535,8 +568,23 @@ static int lg35583_power_off(void *unused)
 	gpio_set_value(gpio_spi_sck, 0);
 	gpio_set_value(gpio_spi_cs, 0);
 
+	lcd_off_jiffies = jiffies;
+	lcd_was_off = true;
+	lcd_powered = false;
 	return 0;
 }
+
+// Firmware 2.0 turns the panel off properly on halt and power off.
+static int lg35583_reboot_notify(struct notifier_block *nb, unsigned long code, void *unused)
+{
+	if ((code == SYS_HALT || code == SYS_POWER_OFF) && lcd_powered)
+		lg35583_power_off(NULL);
+	return NOTIFY_DONE;
+}
+
+static struct notifier_block lg35583_reboot_nb = {
+	.notifier_call = lg35583_reboot_notify,
+};
 
 struct lcdc_data lcdc_data = {
 	.name = "lg35583",
@@ -642,9 +690,15 @@ static int __init lg35583_init(void)
 	gpio_direction_output(gpio_spi_sck, 0);
 	gpio_direction_output(gpio_spi_mosi, 0);
 
+	ret = register_reboot_notifier(&lg35583_reboot_nb);
+	if (ret)
+		goto err_mosi;
+
 	jzfb_register_lcd(&lcdc_data);
 	return 0;
 
+err_mosi:
+	gpio_free(gpio_spi_mosi);
 err_sck:
 	gpio_free(gpio_spi_sck);
 err_cs:
@@ -670,6 +724,7 @@ module_init(lg35583_init);
 
 static void __exit lg35583_exit(void)
 {
+	unregister_reboot_notifier(&lg35583_reboot_nb);
 	proc_remove(lcd_reg_entry);
 	gpio_free(gpio_spi_mosi);
 	gpio_free(gpio_spi_sck);

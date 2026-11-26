@@ -227,6 +227,12 @@ struct lcdc_data {
 	int (*power_on)(void *unused);
 	int (*power_off)(void *unused);
 	int (*set_rotate)(u16 rotate);	// JZFB_SET_ROTATE; NULL: none
+#ifdef HIBY_BOARD_R1
+	// Added in the R1's firmware 2.0 (the R3 Pro II's panel module ends at
+	// set_rotate): called when the screen turns off, once the controller
+	// has stopped and before the pins are released. NULL: none.
+	int (*before_power_off)(void *unused);
+#endif
 };
 
 // --- state ------------------------------------------------------------------
@@ -1019,8 +1025,17 @@ static void disable_fb(void)
 	}
 	is_wait_stop_cnt = 0;
 
+#ifdef HIBY_BOARD_R1
+	// As the R1's firmware 2.0: the panel loses power only after the
+	// controller has let go of its pins.
+	if (jzfb.pdata->before_power_off)
+		jzfb.pdata->before_power_off(NULL);
+	jzfb_deinit_gpio(jzfb.pdata);
+	jzfb.pdata->power_off(NULL);
+#else
 	jzfb.pdata->power_off(NULL);
 	jzfb_deinit_gpio(jzfb.pdata);
+#endif
 	clk_disable_unprepare(jzfb.clk);
 	clk_disable_unprepare(jzfb.pclk);
 }
